@@ -1,0 +1,183 @@
+{% extends "index.html" %}
+{% block content %}
+<div class="page-planificacion">
+
+  <div class="card">
+    <h2>Configuración</h2>
+    <div class="form-row">
+      <label>Algoritmo</label>
+      <select id="algoritmo">
+        <optgroup label="No Expulsivos">
+          <option value="fcfs">FCFS</option>
+          <option value="sjf">SJF</option>
+          <option value="prioridad_estatica">Prioridad Estática</option>
+          <option value="hrrn">HRRN</option>
+        </optgroup>
+        <optgroup label="Expulsivos">
+          <option value="round_robin">Round Robin</option>
+          <option value="srt">SRT</option>
+          <option value="prioridad_dinamica">Prioridad Dinámica</option>
+          <option value="mlfq">MLFQ</option>
+          <option value="cfs">CFS (Linux)</option>
+          <option value="edf">EDF (Tiempo Real)</option>
+        </optgroup>
+      </select>
+    </div>
+    <div class="form-row" id="quantum-row" style="display:none">
+      <label>Quantum</label>
+      <input type="number" id="quantum" value="2" min="1" max="10">
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Procesos</h2>
+    <table id="tabla-procesos">
+      <thead>
+        <tr>
+          <th>PID</th><th>Nombre</th><th>Llegada</th>
+          <th>Ráfaga</th><th>Prioridad</th><th>Memoria</th><th></th>
+        </tr>
+      </thead>
+      <tbody id="procesos-body"></tbody>
+    </table>
+    <div class="btn-row">
+      <button class="btn-secondary" onclick="agregarProceso()">+ Proceso</button>
+      <button class="btn-secondary" onclick="cargarEjemplo()">Ejemplo</button>
+      <button class="btn-primary" onclick="simular()">▶ Simular</button>
+    </div>
+  </div>
+
+  <div class="card" id="card-gantt" style="display:none">
+    <h2>Diagrama de Gantt</h2>
+    <canvas id="gantt-canvas"></canvas>
+  </div>
+
+  <div class="card" id="card-stats" style="display:none">
+    <h2>Estadísticas</h2>
+    <div class="stats-row">
+      <div class="stat-box">
+        <span class="stat-label">TE Promedio</span>
+        <span class="stat-val" id="te-prom">—</span>
+      </div>
+      <div class="stat-box">
+        <span class="stat-label">TR Promedio</span>
+        <span class="stat-val" id="tr-prom">—</span>
+      </div>
+    </div>
+    <canvas id="chart-barras" height="120"></canvas>
+  </div>
+
+  <div class="card" id="card-tabla" style="display:none">
+    <h2>Tabla de Resultados</h2>
+    <table id="tabla-resultados">
+      <thead>
+        <tr>
+          <th>PID</th><th>Nombre</th><th>Llegada</th>
+          <th>Ráfaga</th><th>Inicio</th><th>Fin</th>
+          <th>TE</th><th>TR</th>
+        </tr>
+      </thead>
+      <tbody id="resultados-body"></tbody>
+    </table>
+  </div>
+
+</div>
+
+<script>
+let contadorPID = 1;
+
+const expulsivos = ["round_robin","srt","prioridad_dinamica","mlfq","cfs","edf"];
+
+document.getElementById("algoritmo").addEventListener("change", function() {
+  document.getElementById("quantum-row").style.display =
+    expulsivos.includes(this.value) ? "flex" : "none";
+});
+
+function agregarProceso(p = {}) {
+  const id = p.pid || `P${contadorPID++}`;
+  const tr = document.createElement("tr");
+  tr.innerHTML = `
+    <td><input value="${id}" class="inp-pid"></td>
+    <td><input value="${p.nombre || id}" class="inp-nombre"></td>
+    <td><input type="number" value="${p.llegada ?? 0}" min="0" class="inp-llegada"></td>
+    <td><input type="number" value="${p.rafaga ?? 4}" min="1" class="inp-rafaga"></td>
+    <td>
+      <select class="inp-prioridad">
+        <option value="1" ${p.prioridad==1?'selected':''}>Alta</option>
+        <option value="2" ${(!p.prioridad||p.prioridad==2)?'selected':''}>Media</option>
+        <option value="3" ${p.prioridad==3?'selected':''}>Baja</option>
+      </select>
+    </td>
+    <td><input type="number" value="${p.memoria ?? 64}" min="0" class="inp-memoria"></td>
+    <td><button class="btn-danger" onclick="this.closest('tr').remove()">✕</button></td>
+  `;
+  document.getElementById("procesos-body").appendChild(tr);
+}
+
+function cargarEjemplo() {
+  document.getElementById("procesos-body").innerHTML = "";
+  contadorPID = 1;
+  [
+    {pid:"P1", nombre:"Sistema",  llegada:0, rafaga:6, prioridad:1},
+    {pid:"P2", nombre:"Usuario",  llegada:2, rafaga:4, prioridad:2},
+    {pid:"P3", nombre:"IO Task",  llegada:4, rafaga:2, prioridad:3},
+    {pid:"P4", nombre:"Daemon",   llegada:6, rafaga:8, prioridad:2},
+  ].forEach(agregarProceso);
+}
+
+function getProcesos() {
+  return [...document.querySelectorAll("#procesos-body tr")].map(tr => ({
+    pid:      tr.querySelector(".inp-pid").value,
+    nombre:   tr.querySelector(".inp-nombre").value,
+    llegada:  +tr.querySelector(".inp-llegada").value,
+    rafaga:   +tr.querySelector(".inp-rafaga").value,
+    prioridad:+tr.querySelector(".inp-prioridad").value,
+    memoria:  +tr.querySelector(".inp-memoria").value,
+  }));
+}
+
+async function simular() {
+  const procesos = getProcesos();
+  if (!procesos.length) return;
+  const algoritmo = document.getElementById("algoritmo").value;
+  const quantum   = +document.getElementById("quantum").value;
+  const res = await fetch("/api/simular", {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({algoritmo, procesos, quantum})
+  }).then(r => r.json());
+  if (res.error) { alert(res.error); return; }
+  mostrarGantt(res.gantt, procesos);
+  mostrarStats(res);
+  mostrarTabla(res.tabla);
+  ["card-gantt","card-stats","card-tabla"].forEach(id =>
+    document.getElementById(id).style.display = "block");
+}
+
+function mostrarTabla(tabla) {
+  document.getElementById("resultados-body").innerHTML = tabla.map(p => `
+    <tr>
+      <td>${p.pid}</td><td>${p.nombre}</td><td>${p.llegada}</td>
+      <td>${p.rafaga}</td><td>${p.t_inicio}</td><td>${p.t_fin}</td>
+      <td class="te">${p.te}</td><td class="tr">${p.tr}</td>
+    </tr>`).join("");
+}
+
+function mostrarStats(res) {
+  document.getElementById("te-prom").textContent = res.te_promedio;
+  document.getElementById("tr-prom").textContent = res.tr_promedio;
+  if (window._chartBarras) window._chartBarras.destroy();
+  window._chartBarras = new Chart(document.getElementById("chart-barras"), {
+    type: "bar",
+    data: {
+      labels: res.tabla.map(p => p.pid),
+      datasets: [
+        {label:"TE", data: res.tabla.map(p=>p.te), backgroundColor:"#6366f1"},
+        {label:"TR", data: res.tabla.map(p=>p.tr), backgroundColor:"#22d3ee"},
+      ]
+    },
+    options: {responsive:true, plugins:{legend:{position:"top"}}}
+  });
+}
+</script>
+{% endblock %}

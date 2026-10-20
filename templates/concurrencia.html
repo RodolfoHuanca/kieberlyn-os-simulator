@@ -1,0 +1,126 @@
+{% extends "index.html" %}
+{% block content %}
+<div class="page-concurrencia">
+
+  <div class="card">
+    <h2>Problema de Concurrencia</h2>
+    <div class="form-row">
+      <label>Problema</label>
+      <select id="problema">
+        <option value="productor_consumidor">Productor - Consumidor</option>
+        <option value="lectores_escritores">Lectores - Escritores</option>
+        <option value="filosofos">Filósofos Comensales</option>
+        <option value="barbero">Barbero Dormilón</option>
+        <option value="fumadores">Fumadores</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <label>Duración (seg)</label>
+      <input type="number" id="n-segundos" value="5" min="1" max="15">
+    </div>
+    <div class="descripcion-box" id="descripcion"></div>
+    <div class="btn-row">
+      <button class="btn-primary" id="btn-simular" onclick="simularConcurrencia()">▶ Simular</button>
+    </div>
+  </div>
+
+  <div class="card" id="card-log" style="display:none">
+    <h2>Log de Eventos</h2>
+    <div class="mecanismos-badge" id="mecanismos"></div>
+    <div class="log-container" id="log-container"></div>
+  </div>
+
+  <div class="card" id="card-visual" style="display:none">
+    <h2>Visualización</h2>
+    <canvas id="chart-concurrencia" height="140"></canvas>
+  </div>
+
+</div>
+
+<script>
+const DESCRIPCIONES = {
+  productor_consumidor: "Buffer limitado compartido. El productor genera ítems, el consumidor los retira. Semáforos <b>lleno</b> y <b>vacío</b> + mutex evitan condiciones de carrera.",
+  lectores_escritores:  "Múltiples lectores pueden leer simultáneamente, pero el escritor necesita acceso exclusivo. Mutex + contador de lectores.",
+  filosofos:            "5 filósofos comparten 5 tenedores. Solución con árbitro (semáforo n-1) para evitar deadlock.",
+  barbero:              "Sillas de espera limitadas. El barbero duerme si no hay clientes. Semáforos de sincronización barbero/cliente.",
+  fumadores:            "Agente pone 2 ingredientes aleatoriamente. El fumador que tiene el tercero puede fumar. Semáforos por ingrediente.",
+};
+
+const MECANISMOS = {
+  productor_consumidor: ["Semáforo lleno","Semáforo vacío","Mutex"],
+  lectores_escritores:  ["Mutex lectura","Semáforo escritura","Contador lectores"],
+  filosofos:            ["5 semáforos (tenedores)","Semáforo árbitro"],
+  barbero:              ["Sem. clientes","Sem. barbero","Mutex sillas"],
+  fumadores:            ["Sem. tabaco","Sem. papel","Sem. fósforos"],
+};
+
+function actualizarDescripcion() {
+  const p = document.getElementById("problema").value;
+  document.getElementById("descripcion").innerHTML = DESCRIPCIONES[p];
+}
+
+document.getElementById("problema").addEventListener("change", actualizarDescripcion);
+actualizarDescripcion();
+
+async function simularConcurrencia() {
+  const problema   = document.getElementById("problema").value;
+  const n_segundos = +document.getElementById("n-segundos").value;
+  const btn = document.getElementById("btn-simular");
+  btn.disabled = true; btn.textContent = "⏳ Simulando...";
+
+  const res = await fetch("/api/concurrencia", {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({problema, n_segundos})
+  }).then(r => r.json());
+
+  btn.disabled = false; btn.textContent = "▶ Simular";
+  if (res.error) { alert(res.error); return; }
+
+  mostrarLog(res.log);
+  mostrarMecanismos(problema);
+  mostrarChart(res.log);
+  ["card-log","card-visual"].forEach(id =>
+    document.getElementById(id).style.display = "block");
+}
+
+function mostrarLog(log) {
+  const colores = {};
+  const palette = ["#6366f1","#22d3ee","#f59e0b","#10b981","#ef4444","#a78bfa","#fb923c"];
+  let ci = 0;
+  const html = log.map(e => {
+    if (!colores[e.actor]) colores[e.actor] = palette[ci++ % palette.length];
+    return `<div class="log-entry">
+      <span class="log-t">[${e.t.toFixed(2)}s]</span>
+      <span class="log-actor" style="color:${colores[e.actor]}">${e.actor}</span>
+      <span class="log-evento">${e.evento}</span>
+    </div>`;
+  }).join("");
+  document.getElementById("log-container").innerHTML = html;
+}
+
+function mostrarMecanismos(problema) {
+  const mec = MECANISMOS[problema] || [];
+  document.getElementById("mecanismos").innerHTML =
+    mec.map(m => `<span class="badge">${m}</span>`).join("");
+}
+
+function mostrarChart(log) {
+  const actores = [...new Set(log.map(e => e.actor))];
+  const counts  = actores.map(a => log.filter(e => e.actor === a).length);
+  if (window._chartConc) window._chartConc.destroy();
+  window._chartConc = new Chart(document.getElementById("chart-concurrencia"), {
+    type: "bar",
+    data: {
+      labels: actores,
+      datasets: [{
+        label: "Eventos",
+        data: counts,
+        backgroundColor: ["#6366f1","#22d3ee","#f59e0b","#10b981","#ef4444","#a78bfa"],
+      }]
+    },
+    options: {responsive:true, plugins:{legend:{display:false}}}
+  });
+}
+</script>
+{% endblock %}

@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Simulador SO — UNA Puno</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/css/theme.css" />
+  <link rel="stylesheet" href="/static/css/layout.css" />
+  <link rel="stylesheet" href="/static/css/components.css" />
+  <link rel="stylesheet" href="/static/css/gantt.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+</head>
+<body>
+
+<div class="app-wrapper">
+
+  <!-- NAVBAR -->
+  <nav class="navbar">
+    <div class="navbar-logo">
+      <div class="logo-icon">⚙</div>
+      <div class="logo-text">
+        <h2>Simulador SO</h2>
+        <span>Sistemas Operativos</span>
+      </div>
+    </div>
+
+    <span class="nav-section-label">Principal</span>
+    <a class="nav-item active" onclick="showPage('inicio')">
+      <span class="nav-icon">🏠</span> Inicio
+    </a>
+    <a class="nav-item" onclick="showPage('procesos')">
+      <span class="nav-icon">⚡</span> Procesos
+    </a>
+
+    <span class="nav-section-label">Módulo 1</span>
+    <a class="nav-item" onclick="showPage('planificacion')">
+      <span class="nav-icon">📋</span> Planificación
+    </a>
+    <a class="nav-item" onclick="showPage('gantt')">
+      <span class="nav-icon">📊</span> Gantt
+    </a>
+    <a class="nav-item" onclick="showPage('hilos')">
+      <span class="nav-icon">🔀</span> Hilos
+    </a>
+
+    <span class="nav-section-label">Módulo 2</span>
+    <a class="nav-item" onclick="showPage('concurrencia')">
+      <span class="nav-icon">🔄</span> Concurrencia
+    </a>
+
+    <span class="nav-section-label">Sistema</span>
+    <a class="nav-item" onclick="showPage('recursos')">
+      <span class="nav-icon">💾</span> Recursos
+    </a>
+    <a class="nav-item" onclick="showPage('configuracion')">
+      <span class="nav-icon">⚙️</span> Configuración
+    </a>
+
+    <div class="navbar-bottom">
+      <div class="nav-item" style="font-size:11px; color:var(--text-muted); cursor:default;">
+        <span class="nav-icon">🎓</span> UNA Puno — 2026
+      </div>
+    </div>
+  </nav>
+
+  <!-- MAIN -->
+  <div class="main-content">
+
+    <!-- TOPBAR -->
+    <div class="topbar">
+      <div class="topbar-timer">
+        <span id="timer-display">00:00:00</span>
+      </div>
+
+      <div class="topbar-controls">
+        <button class="btn-play tooltip" data-tip="Iniciar" id="btn-play" onclick="togglePlay()">▶</button>
+        <button class="btn-icon tooltip" data-tip="Pausar" onclick="togglePause()">⏸</button>
+        <button class="btn-icon tooltip" data-tip="Reiniciar" onclick="resetSim()">↺</button>
+        <select class="speed-select" id="speed-select" onchange="setSpeed(this.value)">
+          <option value="2000">0.5x</option>
+          <option value="1000" selected>1x</option>
+          <option value="500">2x</option>
+          <option value="250">4x</option>
+        </select>
+      </div>
+
+      <div class="topbar-divider"></div>
+
+      <div class="topbar-badge">
+        <span class="dot" id="dot-tipo" style="background:var(--state-ready)"></span>
+        <span id="badge-tipo">Planificación</span>
+      </div>
+
+      <div class="topbar-badge">
+        <span class="dot" id="dot-expulsivo" style="background:var(--prio-medium)"></span>
+        <span id="badge-expulsivo">Algoritmo</span>
+      </div>
+
+      <div class="topbar-badge">
+        <span>🖥</span>
+        <span id="badge-cpus">CPU(s): 1</span>
+      </div>
+
+      <div class="topbar-badge">
+        <span>🔀</span>
+        <span id="badge-hilos">Hilos: 4</span>
+      </div>
+
+      <div class="topbar-right">
+        <button class="theme-toggle tooltip" data-tip="Cambiar tema" onclick="toggleTheme()">🌙</button>
+        <button class="btn-icon tooltip" data-tip="Configuración" onclick="showPage('configuracion')">⚙️</button>
+      </div>
+    </div>
+
+    <!-- PÁGINAS -->
+    <div id="page-inicio" class="page-content">
+
+      <!-- Estado del sistema -->
+      <div class="panel" style="grid-column: span 1;">
+        <div class="panel-header">
+          <div class="panel-title">
+            <div class="panel-icon" style="background:var(--accent-soft);">📊</div>
+            Estado del sistema
+          </div>
+          <button class="btn-icon">⋯</button>
+        </div>
+
+        <div class="donut-wrapper">
+          <canvas id="cpu-donut" width="110" height="110"></canvas>
+          <div class="donut-center">
+            <div class="pct" id="cpu-pct">0%</div>
+            <div class="lbl">Uso CPU</div>
+          </div>
+        </div>
+
+        <div class="stat-row">
+          <div class="stat-label">
+            <div class="stat-icon" style="background:#eef0fe;">⚡</div>
+            Procesos activos
+          </div>
+          <div class="stat-value" id="stat-activos">0 / 0</div>
+        </div>
+
+        <div style="margin-top:10px;">
+          <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-secondary);margin-bottom:4px;">
+            <span>Memoria RAM</span>
+            <span id="stat-mem">0 MB / 1024 MB</span>
+          </div>
+          <div class="progress-bar-wrapper">
+            <div class="progress-bar-fill mem" id="mem-bar" style="width:0%"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Cola de procesos -->
+      <div class="panel col-span-2">
+        <div class="panel-header">
+          <div class="panel-title">
+            <div class="panel-icon" style="background:#fef3c7;">📋</div>
+            Cola de procesos
+          </div>
+          <div style="display:flex;gap:6px;">
+            <button class="btn-ghost" style="font-size:11px;" onclick="showPage('procesos')">Ver todos →</button>
+          </div>
+        </div>
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>PID</th>
+                <th>Nombre</th>
+                <th>Estado</th>
+                <th>Prioridad</th>
+                <th>CPU %</th>
+                <th>Ráfaga</th>
+              </tr>
+            </thead>
+            <tbody id="process-table-body">
+              <tr>
+                <td colspan="6">
+                  <div class="empty-state">
+                    <div class="empty-icon">📭</div>
+                    No hay procesos. Agrega uno desde el panel derecho.
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Crear proceso -->
+      <div class="panel row-span-2" style="grid-column: 4;">
+        <div class="panel-header">
+          <div class="panel-title">
+            <div class="panel-icon" style="background:#dcfce7;">➕</div>
+            Crear proceso
+          </div>
+          <button class="btn-icon" id="btn-collapse-form">▲</button>
+        </div>
+
+        <div id="process-form">
+          <div class="form-group">
+            <label class="form-label">Nombre</label>
+            <input class="form-input" id="f-nombre" type="text" placeholder="Proceso_1" />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Prioridad</label>
+            <select class="form-select" id="f-prioridad">
+              <option value="alta">🔴 Alta</option>
+              <option value="media" selected>🟡 Media</option>
+              <option value="baja">🟢 Baja</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Ráfaga CPU (ms)</label>
+            <input class="form-input" id="f-rafaga" type="number" min="1" max="100" value="10" />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Tiempo de llegada</label>
+            <input class="form-input" id="f-llegada" type="number" min="0" value="0" />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Memoria (MB)</label>
+            <input class="form-range" id="f-memoria" type="range" min="16" max="512" step="16" value="64"
+              oninput="document.getElementById('f-mem-val').textContent = this.value + ' MB'" />
+            <span style="font-size:12px;color:var(--text-muted);" id="f-mem-val">64 MB</span>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Tipo</label>
+            <div class="toggle-group">
+              <button class="toggle-btn active" id="tipo-cpu" onclick="setTipo('cpu')">CPU-bound</button>
+              <button class="toggle-btn" id="tipo-io" onclick="setTipo('io')">I/O-bound</button>
+            </div>
+          </div>
+
+          <button class="btn btn-primary" style="width:100%;margin-top:4px;" onclick="agregarProceso()">
+            ➕ Agregar Proceso
+          </button>
+
+          <div style="border-top:1px solid var(--border);margin-top:14px;padding-top:14px;">
+            <div class="form-label" style="margin-bottom:8px;">Parámetros</div>
+
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+              <span style="font-size:12px;color:var(--text-secondary);">CPUs</span>
+              <div style="display:flex;align-items:center;gap:6px;">
+                <button class="btn-icon" onclick="ajustarCPU(-1)">−</button>
+                <span class="td-mono" id="param-cpus">1</span>
+                <button class="btn-icon" onclick="ajustarCPU(1)">+</button>
+              </div>
+            </div>
+
+            <div style="display:flex;align-items:center;justify-content:space-between;">
+              <span style="font-size:12px;color:var(--text-secondary);">Hilos</span>
+              <div style="display:flex;align-items:center;gap:6px;">
+                <button class="btn-icon" onclick="ajustarHilos(-1)">−</button>
+                <span class="td-mono" id="param-hilos">4</span>
+                <button class="btn-icon" onclick="ajustarHilos(1)">+</button>
+              </div>
+            </div>
+          </div>
+
+          <button class="btn btn-ghost" style="width:100%;margin-top:12px;" onclick="resetSim()">
+            ↺ Reiniciar simulación
+          </button>
+        </div>
+      </div>
+
+      <!-- Proceso en ejecución -->
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <div class="panel-icon" style="background:#dcfce7;">▶</div>
+            Proceso en ejecución
+          </div>
+          <span class="badge badge-running" id="badge-estado-actual">Ejecutando</span>
+        </div>
+        <div id="proceso-actual-empty" class="empty-state">
+          <div class="empty-icon">💤</div>
+          Sin proceso activo
+        </div>
+        <div id="proceso-actual-info" style="display:none;">
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            <div class="stat-row">
+              <span class="stat-label">PID</span>
+              <span class="stat-value td-mono" id="pa-pid">—</span>
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Nombre</span>
+              <span class="stat-value" id="pa-nombre">—</span>
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Prioridad</span>
+              <span id="pa-prioridad">—</span>
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">CPU %</span>
+              <span class="stat-value td-mono" id="pa-cpu">0%</span>
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Tiempo CPU</span>
+              <span class="stat-value td-mono" id="pa-tiempo">00:00:00</span>
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Ráfaga restante</span>
+              <span class="stat-value td-mono" id="pa-rafaga">—</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Cola de listos -->
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <div class="panel-icon" style="background:var(--accent-soft);">⏳</div>
+            Cola de listos
+          </div>
+          <span class="td-mono" style="font-size:11px;" id="ready-count">0</span>
+        </div>
+        <div id="cola-listos-list">
+          <div class="empty-state">
+            <div class="empty-icon">📭</div>
+            Cola vacía
+          </div>
+        </div>
+      </div>
+
+      <!-- Estadísticas -->
+      <div class="panel col-span-2">
+        <div class="panel-header">
+          <div class="panel-title">
+            <div class="panel-icon" style="background:#fef3c7;">📈</div>
+            Estadísticas
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <div class="stat-row">
+            <div class="stat-label">
+              <div class="stat-icon" style="background:#fee2e2;">⏱</div>
+              Tiempo espera prom.
+            </div>
+            <span class="stat-value td-mono" id="stat-te">0 ms</span>
+          </div>
+          <div class="stat-row">
+            <div class="stat-label">
+              <div class="stat-icon" style="background:#dbeafe;">🔁</div>
+              Tiempo retorno prom.
+            </div>
+            <span class="stat-value td-mono" id="stat-tr">0 ms</span>
+          </div>
+          <div class="stat-row">
+            <div class="stat-label">
+              <div class="stat-icon" style="background:#dcfce7;">📦</div>
+              Throughput
+            </div>
+            <span class="stat-value td-mono" id="stat-throughput">0 proc/s</span>
+          </div>
+          <div class="stat-row">
+            <div class="stat-label">
+              <div class="stat-icon" style="background:#f3e8ff;">🖥</div>
+              Uso de CPU
+            </div>
+            <span class="stat-value td-mono" id="stat-cpu-pct">0%</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Gantt mini -->
+      <div class="panel col-span-3">
+        <div class="panel-header">
+          <div class="panel-title">
+            <div class="panel-icon" style="background:#fef3c7;">📊</div>
+            Diagrama de Gantt
+          </div>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <select class="speed-select" id="gantt-mode" onchange="setGanttMode(this.value)">
+              <option value="realtime">Tiempo real</option>
+              <option value="step">Paso a paso</option>
+              <option value="full">Completo</option>
+            </select>
+            <button class="btn-icon" onclick="showPage('gantt')">⤢</button>
+          </div>
+        </div>
+        <div class="gantt-container">
+          <div class="gantt-grid" id="gantt-main">
+            <div class="empty-state">
+              <div class="empty-icon">📊</div>
+              Inicia la simulación para ver el Gantt
+            </div>
+          </div>
+        </div>
+        <div class="gantt-legend" id="gantt-legend"></div>
+      </div>
+
+      <!-- Concurrencia mini -->
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <div class="panel-icon" style="background:#f3e8ff;">🔄</div>
+            Concurrencia
+          </div>
+          <button class="btn-icon" onclick="showPage('concurrencia')">⤢</button>
+        </div>
+        <div class="toggle-group" style="margin-bottom:12px;">
+          <button class="toggle-btn active" onclick="setConcMode('mutex')">Mutex</button>
+          <button class="toggle-btn" onclick="setConcMode('semaforo')">Semáforo</button>
+          <button class="toggle-btn" onclick="setConcMode('condicion')">Condición</button>
+        </div>
+        <div id="recursos-list">
+          <div class="resource-item">
+            <span>Recurso A</span>
+            <span class="resource-status resource-free">Libre</span>
+          </div>
+          <div class="resource-item">
+            <span>Recurso B</span>
+            <span class="resource-status resource-busy">Ocupado</span>
+          </div>
+          <div class="resource-item">
+            <span>Recurso C</span>
+            <span class="resource-status resource-free">Libre</span>
+          </div>
+          <div class="resource-item">
+            <span>Recurso D</span>
+            <span class="resource-status resource-free">Libre</span>
+          </div>
+        </div>
+        <div style="margin-top:12px;border-top:1px solid var(--border);padding-top:10px;">
+          <div style="font-size:11px;font-weight:700;color:var(--text-muted);margin-bottom:6px;">EVENTOS RECIENTES</div>
+          <div id="eventos-list">
+            <div class="empty-state" style="padding:10px 0;">
+              <div style="font-size:12px;">Sin eventos aún</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /page-inicio -->
+
+    <!-- Placeholder páginas secundarias -->
+<div id="page-procesos" class="page-content" style="display:none;">
+  <div class="panel col-span-3">
+    <div class="panel-header">
+      <div class="panel-title">
+        <div class="panel-icon" style="background:#fef3c7;">⚡</div>
+        Todos los procesos
+      </div>
+    </div>
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr>
+            <th>PID</th><th>Nombre</th><th>Estado</th><th>Prioridad</th>
+            <th>Ráfaga</th><th>Llegada</th><th>Memoria</th><th>CPU%</th><th>TE</th><th>TR</th>
+          </tr>
+        </thead>
+        <tbody id="procesos-full-tbody">
+          <tr><td colspan="10">
+            <div class="empty-state"><div class="empty-icon">📭</div>Sin procesos</div>
+          </td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-header">
+      <div class="panel-title">
+        <div class="panel-icon" style="background:#dcfce7;">➕</div>
+        Agregar proceso
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Nombre</label>
+      <input class="form-input" id="f2-nombre" type="text" placeholder="Proceso_1"/>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Prioridad</label>
+      <select class="form-select" id="f2-prioridad">
+        <option value="alta">🔴 Alta</option>
+        <option value="media" selected>🟡 Media</option>
+        <option value="baja">🟢 Baja</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Ráfaga CPU (ms)</label>
+      <input class="form-input" id="f2-rafaga" type="number" min="1" max="100" value="10"/>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Tiempo de llegada</label>
+      <input class="form-input" id="f2-llegada" type="number" min="0" value="0"/>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Memoria (MB)</label>
+      <input class="form-input" id="f2-memoria" type="number" min="16" max="512" value="64"/>
+    </div>
+    <button class="btn btn-primary" style="width:100%;" onclick="agregarProceso()">➕ Agregar</button>
+  </div>
+</div>
+    
+<div id="page-planificacion" class="page-content" style="display:none;">
+  <div class="panel col-span-4">
+    <div class="panel-header">
+      <div class="panel-title">
+        <div class="panel-icon" style="background:var(--accent-soft);">📋</div>
+        Planificación de Procesos
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:220px 1fr;gap:20px;">
+      <div style="display:flex;flex-direction:column;gap:12px;">
+        <div class="form-group">
+          <label class="form-label">Algoritmo</label>
+          <select class="form-select" id="pl-algoritmo">
+            <optgroup label="No Expulsivos">
+              <option value="fcfs">FCFS</option>
+              <option value="sjf">SJF</option>
+              <option value="prioridad_estatica">Prioridad Estática</option>
+              <option value="hrrn">HRRN</option>
+            </optgroup>
+            <optgroup label="Expulsivos">
+              <option value="round_robin">Round Robin</option>
+              <option value="srt">SRT</option>
+              <option value="prioridad_dinamica">Prioridad Dinámica</option>
+              <option value="mlfq">MLFQ (Windows)</option>
+              <option value="cfs">CFS (Linux)</option>
+              <option value="edf">EDF (Tiempo Real)</option>
+            </optgroup>
+          </select>
+        </div>
+        <div class="form-group" id="pl-quantum-group" style="display:none;">
+          <label class="form-label">Quantum</label>
+          <input class="form-input" type="number" id="pl-quantum" value="4" min="1" max="20"/>
+        </div>
+        <div style="padding:10px;background:var(--bg-surface-2);border-radius:var(--radius-md);border:1px solid var(--border);">
+          <div style="font-size:11px;font-weight:700;color:var(--text-muted);margin-bottom:6px;">DESCRIPCIÓN</div>
+          <div id="pl-algo-desc" style="font-size:12px;color:var(--text-secondary);line-height:1.5;"></div>
+        </div>
+        <button class="btn btn-ghost" onclick="plCargarEjemplo()">📥 Cargar ejemplo</button>
+        <button class="btn btn-ghost" onclick="plEnviarAlSimulador()">📤 Enviar al simulador</button>
+        <button class="btn btn-primary" id="pl-btn-simular" onclick="plSimular()">▶ Simular</button>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:16px;">
+        <div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+            <div class="form-label">Procesos</div>
+            <button class="btn btn-ghost" style="font-size:11px;" onclick="plAgregarFila()">+ Añadir fila</button>
+          </div>
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>PID</th><th>Nombre</th><th>Llegada</th>
+                  <th>Ráfaga</th><th>Prioridad</th><th>Mem (MB)</th><th></th>
+                </tr>
+              </thead>
+              <tbody id="pl-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;">
+          <div class="gantt-metric-card">
+            <div class="metric-val" id="pl-te-prom">—</div>
+            <div class="metric-lbl">TE Promedio</div>
+          </div>
+          <div class="gantt-metric-card">
+            <div class="metric-val" id="pl-tr-prom">—</div>
+            <div class="metric-lbl">TR Promedio</div>
+          </div>
+          <div class="gantt-metric-card">
+            <div class="metric-val" id="pl-throughput">—</div>
+            <div class="metric-lbl">Throughput</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel col-span-4">
+    <div class="panel-header">
+      <div class="panel-title">
+        <div class="panel-icon" style="background:#fef3c7;">📊</div>
+        Diagrama de Gantt
+      </div>
+      <div id="pl-gantt-legend" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
+    </div>
+    <canvas id="pl-gantt-canvas" style="width:100%;display:block;"></canvas>
+  </div>
+
+  <div class="panel col-span-2">
+    <div class="panel-header">
+      <div class="panel-title">
+        <div class="panel-icon" style="background:#dcfce7;">📈</div>
+        Comparativa TE / TR
+      </div>
+    </div>
+    <canvas id="pl-chart-barras" height="180"></canvas>
+  </div>
+
+  <div class="panel col-span-2">
+    <div class="panel-header">
+      <div class="panel-title">
+        <div class="panel-icon" style="background:#dbeafe;">📋</div>
+        Tabla de resultados
+      </div>
+    </div>
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr>
+            <th>PID</th><th>Nombre</th><th>Llegada</th><th>Ráfaga</th>
+            <th>T.Inicio</th><th>T.Fin</th>
+            <th style="color:#6366f1;">TE</th>
+            <th style="color:#22d3ee;">TR</th>
+          </tr>
+        </thead>
+        <tbody id="pl-res-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="panel col-span-2">
+    <div class="panel-header">
+      <div class="panel-title">
+        <div class="panel-icon" style="background:#1a1d27;">⌨</div>
+        Log de decisiones
+      </div>
+      <button class="btn-icon" onclick="document.getElementById('pl-terminal').innerHTML=''">✕</button>
+    </div>
+    <div id="pl-terminal" style="
+      background:#0f1117;border-radius:var(--radius-md);
+      padding:12px 14px;font-family:var(--font-mono);
+      font-size:12px;line-height:1.8;max-height:260px;
+      overflow-y:auto;border:1px solid #2e3347;color:#9099b8;">
+      <span style="color:#5a6280;">// Presiona Simular para ver el log...</span>
+    </div>
+  </div>
+
+  <div class="panel col-span-2">
+    <div class="panel-header">
+      <div class="panel-title">
+        <div class="panel-icon" style="background:#dbeafe;">📉</div>
+        Línea de tiempo de estados
+      </div>
+    </div>
+    <div id="pl-timeline" style="padding:4px 0;">
+      <div class="empty-state">
+        <div class="empty-icon">📉</div>
+        Simula para ver la línea de tiempo
+      </div>
+    </div>
+  </div>
+
+</div>
+
+
+    
+    <div id="page-gantt"          class="page-content" style="display:none;"></div>
+    <div id="page-hilos"          class="page-content" style="display:none;"></div>
+
+
+
+
+<div id="page-concurrencia" class="page-content" style="display:none;">
+  <div class="panel col-span-4">
+    <div class="panel-header">
+      <div class="panel-title">
+        <div class="panel-icon" style="background:#f3e8ff;">🔄</div>
+        Sincronización de Procesos
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:260px 1fr;gap:20px;">
+      <div style="display:flex;flex-direction:column;gap:12px;">
+        <div class="form-group">
+          <label class="form-label">Problema</label>
+          <select class="form-select" id="conc-problema" onchange="concActualizarDesc()">
+            <option value="productor_consumidor">Productor - Consumidor</option>
+            <option value="lectores_escritores">Lectores - Escritores</option>
+            <option value="filosofos">Filósofos Comensales</option>
+            <option value="barbero">Barbero Dormilón</option>
+            <option value="fumadores">Fumadores</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Duración (segundos)</label>
+          <input class="form-input" type="number" id="conc-segundos" value="5" min="1" max="30"/>
+        </div>
+
+        <div style="padding:10px;background:var(--bg-surface-2);border-radius:var(--radius-md);border:1px solid var(--border);">
+          <div style="font-size:11px;font-weight:700;color:var(--text-muted);margin-bottom:6px;">DESCRIPCIÓN</div>
+          <div id="conc-desc" style="font-size:12px;color:var(--text-secondary);line-height:1.5;"></div>
+        </div>
+
+        <div>
+          <div style="font-size:11px;font-weight:700;color:var(--text-muted);margin-bottom:6px;">MECANISMOS</div>
+          <div id="conc-mecanismos" style="display:flex;flex-wrap:wrap;gap:4px;"></div>
+        </div>
+
+        <button class="btn btn-primary" id="conc-btn" onclick="concSimular()">▶ Simular</button>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:16px;">
+        <div class="panel" style="background:var(--bg-surface-2);padding:12px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+            <div class="form-label">Log de eventos</div>
+            <span class="td-mono" style="font-size:11px;" id="conc-log-count">0 eventos</span>
+          </div>
+          <div id="conc-log" style="max-height:280px;overflow-y:auto;display:flex;flex-direction:column;gap:2px;">
+            <div class="empty-state">
+              <div class="empty-icon">📭</div>
+              Presiona Simular para ver los eventos
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel col-span-4">
+    <div class="panel-header">
+      <div class="panel-title">
+        <div class="panel-icon" style="background:#fef3c7;">📊</div>
+        Eventos por actor
+      </div>
+    </div>
+    <canvas id="conc-chart" height="160"></canvas>
+  </div>
+</div>
+
+    <div id="page-recursos"       class="page-content" style="display:none;"></div>
+
+<div id="page-configuracion" class="page-content" style="display:none;">
+  <div class="panel col-span-2">
+    <div class="panel-header">
+      <div class="panel-title">
+        <div class="panel-icon" style="background:var(--accent-soft);">⚙️</div>
+        Configuración del simulador
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Quantum (Round Robin / MLFQ)</label>
+      <input class="form-input" type="number" id="cfg-quantum" value="4" min="1" max="20"
+        onchange="window.simState.quantum = +this.value"/>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Velocidad de simulación</label>
+      <select class="form-select" onchange="setSpeed(this.value)">
+        <option value="2000">0.5x</option>
+        <option value="1000" selected>1x</option>
+        <option value="500">2x</option>
+        <option value="250">4x</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Tema</label>
+      <div class="toggle-group">
+        <button class="toggle-btn active" onclick="document.documentElement.setAttribute('data-theme','light');this.classList.add('active');this.nextElementSibling.classList.remove('active')">☀️ Claro</button>
+        <button class="toggle-btn" onclick="document.documentElement.setAttribute('data-theme','dark');this.classList.add('active');this.previousElementSibling.classList.remove('active')">🌙 Oscuro</button>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Memoria total (MB)</label>
+      <input class="form-input" type="number" value="1024" min="256" max="8192"/>
+    </div>
+  </div>
+
+  <div class="panel col-span-2">
+    <div class="panel-header">
+      <div class="panel-title">
+        <div class="panel-icon" style="background:#fef3c7;">📚</div>
+        Algoritmos disponibles
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px;">
+      <div style="font-size:11px;font-weight:700;color:var(--text-muted);margin-bottom:2px;">NO EXPULSIVOS</div>
+      ${['FCFS','SJF','Prioridad Estática','HRRN'].map(a =>
+        `<div class="stat-row"><span style="font-size:12.5px;">${a}</span><span class="badge badge-ready">No expulsivo</span></div>`
+      ).join('')}
+      <div style="font-size:11px;font-weight:700;color:var(--text-muted);margin:8px 0 2px;">EXPULSIVOS</div>
+      ${['Round Robin','SRT','Prioridad Dinámica','MLFQ','CFS','EDF'].map(a =>
+        `<div class="stat-row"><span style="font-size:12.5px;">${a}</span><span class="badge badge-running">Expulsivo</span></div>`
+      ).join('')}
+    </div>
+  </div>
+</div>
+
+  </div><!-- /main-content -->
+</div><!-- /app-wrapper -->
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="/static/js/main.js"></script>
+<script src="/static/js/api.js"></script>
+<script src="/static/js/charts.js"></script>
+<script src="/static/js/gantt.js"></script>
+<script src="/static/js/simulador.js"></script>
+<script src="/static/js/concurrencia.js"></script>
+</body>
+</html>
